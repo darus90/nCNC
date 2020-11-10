@@ -7,10 +7,7 @@
 
 # This project now continues on this page: [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 
-* Go new repository [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
-
-
-## Table of content ( İçerik )
+## Table of content [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 * [Installation](#Install)
 * [Usage](#Usage)
   * [Quick Clear Objects and Scene Optimize](#Clear-Objects-and-Scene-Optimize)
@@ -22,42 +19,43 @@
 * [License](#License)
 
 ## Install
-
-
-* Go new repository [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 
 ![Install](images/nCNC-Setup.gif)
 
-* Go new repository [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 
 ## Usage
 
 ### Clear Objects and Scene Optimize
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Clear Objects and Scene Optimize](images/nCNC-ClearObjectsandOptimizeScene.gif)
 
 
 ### Only Scene Optimize
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Only Scene Optimize](images/nCNC-SceneOptimize.gif)
 
 
 ### Convert to Curve
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Convert](images/nCNC-ConvertObject.gif)
 
 
 ### Include in G code
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Include in G code](images/nCNC-Internal-External.gif)
 
 
 ### Resolution Curve
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Resolution Curve](images/nCNC-Resolution.gif)
 
 
 ### Export Gcode
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 ![Resolution Curve](images/nCNC-Export.gif)
 
-* Go new repository [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
-
 ## License
+* [Go new repository https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 
-* Go new repository [https://github.com/manahter/nCNC](https://github.com/manahter/nCNC)
 The nCNC addon is licensed under the terms of the GPL Open Source license and is available for free. ( Tr: Bedava indir kullan )
