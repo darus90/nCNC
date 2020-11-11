@@ -50,8 +50,8 @@ from nCNC.modules.serial.tools.list_ports import comports
 bl_info = {
     "name": "nCNC",
     "description": "CNC Controls, G code operations",
-    "author": "Manahter",
-    "version": (0, 6, 1),
+    "author": "Manahter (manahter@gmail.com)",
+    "version": (0, 6, 2),
     "blender": (2, 90, 0),
     "location": "View3D",
     "category": "Generic",
@@ -555,6 +555,7 @@ class NCNC_OT_Text(Operator):
     code_lines = []
     last_index = 0
     pr_txt = None
+    delay = .1
 
     def execute(self, context):
         return self.invoke(context, None)
@@ -568,11 +569,21 @@ class NCNC_OT_Text(Operator):
 
         self.code_lines = self.pr_txt.id_data.as_string().splitlines()
 
+        return self.timer_add(context)
+
+    def timer_add(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
         return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
 
     def modal(self, context, event):
         if not self.pr_txt.isrun[self.run_index]:
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
         pr = self.pr_txt
 
@@ -617,7 +628,7 @@ class NCNC_OT_Text(Operator):
         self.report({'INFO'}, "Loaded")
         self.pr_txt.isrun[self.run_index] = False
         context.scene.ncnc_pr_texts.loading = 0
-        return {'FINISHED'}
+        return self.timer_remove(context)
 
 
 ##################################
@@ -1736,14 +1747,24 @@ class NCNC_OT_Communication(Operator):
 
         context.window_manager.modal_handler_add(self)
 
-        return{"RUNNING_MODAL"}
+        return self.timer_add(context)
+
+    def timer_add(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
+        return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
 
     def modal(self, context, event):
         # ########################### STANDARD
         if not self.inloop:
             if context.area:
                 context.area.tag_redraw()
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
         if time.time() - self._last_time < self.delay:
             return {'PASS_THROUGH'}
@@ -1752,7 +1773,7 @@ class NCNC_OT_Communication(Operator):
 
         if not self.pr_con.isconnected:
             unregister_modal(self)
-            return {'CANCELLED'}
+            return self.timer_remove(context)
         # ####################################
         # ####################################
 
@@ -2029,21 +2050,31 @@ class NCNC_OT_Decoder(Operator):
 
         self.report({'INFO'}, "NCNC Decoder Started")
 
+        return self.timer_add(context)
+
+    def timer_add(self, context):
+        # add to timer
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
         return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
 
     def modal(self, context, event):
         # ########################### STANDARD
         if not self.inloop:
             if context.area:
                 context.area.tag_redraw()
-            print("İptal edildi")
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
+        print(event.type)
         if time.time() - self._last_time < self.delay:
             return {'PASS_THROUGH'}
 
         self._last_time = time.time()
-        print("Döngüde")
         # ####################################
         # ####################################
 
@@ -2058,8 +2089,7 @@ class NCNC_OT_Decoder(Operator):
         self.pr_com = context.scene.ncnc_pr_communication
 
         if not self.pr_con.isconnected:
-            print("İptal edildi 2")
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
         if not self.pr_com.isactive or self.pr_com.isrun or self.q_count < 5:
             self.decode("?")
@@ -4536,14 +4566,24 @@ class NCNC_OT_Vision(Operator):
         # ####################################
         # ####################################
 
+        return self.timer_add(context)
+
+    def timer_add(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
         return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
 
     def modal(self, context, event):
         # ########################### STANDARD
         if not self.inloop:
             if context.area:
                 context.area.tag_redraw()
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
         if time.time() - self._last_time < self.delay:
             return {'PASS_THROUGH'}
@@ -5103,14 +5143,24 @@ class NCNC_OT_Objects(Operator):
         # ####################################
         # ####################################
 
+        return self.timer_add(context)
+
+    def timer_add(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
         return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
 
     def modal(self, context, event):
         # ########################### STANDARD
         if not self.inloop:
             if context.area:
                 context.area.tag_redraw()
-            return {'CANCELLED'}
+            return self.timer_remove(context)
 
         if time.time() - self._last_time < self.delay:
             return {'PASS_THROUGH'}
