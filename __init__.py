@@ -2070,7 +2070,6 @@ class NCNC_OT_Decoder(Operator):
                 context.area.tag_redraw()
             return self.timer_remove(context)
 
-        print(event.type)
         if time.time() - self._last_time < self.delay:
             return {'PASS_THROUGH'}
 
