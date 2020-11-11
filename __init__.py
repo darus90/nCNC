@@ -50,7 +50,7 @@ from nCNC.modules.serial.tools.list_ports import comports
 bl_info = {
     "name": "nCNC",
     "description": "CNC Controls, G code operations",
-    "author": "Manahter (manahter@gmail.com)",
+    "author": "Manahter",
     "version": (0, 6, 2),
     "blender": (2, 90, 0),
     "location": "View3D",
@@ -1690,13 +1690,16 @@ def register_modal(self):
 def unregister_modal(self):
     # Get previous running modal
     self_prev = running_modals.get(self.bl_idname)
+    
+    try:
+        # if exists previous modal (self), stop it
+        if self_prev:
+            self_prev.inloop = False
+            running_modals.pop(self.bl_idname)
 
-    # if exists previous modal (self), stop it
-    if self_prev:
-        self_prev.inloop = False
+            # self.report({'INFO'}, "NCNC Communication: Stopped (Previous Modal)")
+    except:
         running_modals.pop(self.bl_idname)
-
-        # self.report({'INFO'}, "NCNC Communication: Stopped (Previous Modal)")
 
 # ##########################################################
 # ##########################################################
