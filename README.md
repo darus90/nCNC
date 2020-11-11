@@ -2,7 +2,7 @@
 # Blender Addon - nCNC - CAM/CAD
 [![Blender Addon](https://img.shields.io/badge/Blender-2.9-orange?&style=flat&logo=blender&logoColor=white)](https://www.blender.org/download/releases/2-90/)
 [![Blender Addon](https://img.shields.io/badge/Addon-nCNC-orange)](https://github.com/manahter/nCNC)
-[![Blender Addon](https://img.shields.io/github/v/release/manahter/nCNC?include_prereleases)](https://github.com/manahter/nCNC)
+[![Blender Addon](https://img.shields.io/github/v/release/manahter/nCNC)](https://github.com/manahter/nCNC)
 [![Blender Addon](https://img.shields.io/github/release-date-pre/manahter/nCNC)](https://github.com/manahter/nCNC)
 [![Blender Addon](https://img.shields.io/github/license/manahter/nCNC)](https://github.com/manahter/nCNC/blob/main/LICENSE)
 ![GitHub last commit](https://img.shields.io/github/last-commit/manahter/nCNC)
