@@ -1,5 +1,5 @@
 ![Cover](https://user-images.githubusercontent.com/73780835/98469456-cff8f880-21f0-11eb-9431-a0b6cd2e5d80.png)
-# Blender Addon - nCNC - CAM/CAD
+# Blender Add-on - nCNC - CAM/CAD
 [![Blender Addon](https://img.shields.io/badge/Blender-2.9-orange?&style=flat&logo=blender&logoColor=white)](https://www.blender.org/download/releases/2-90/)
 [![Blender Addon](https://img.shields.io/badge/Addon-nCNC-orange)](https://github.com/manahter/nCNC)
 [![Blender Addon](https://img.shields.io/github/v/release/manahter/nCNC)](https://github.com/manahter/nCNC)
@@ -10,8 +10,8 @@
 
 
 * _Currently only curves can be converted (will be developed for 3D objects as well)_
-* _This addon has been tested with GRBL v1.1 - CNC 3018._
-* _This addon under development._
+* _This add-on has been tested with GRBL v1.1 - CNC 3018._
+* _This add-on under development._
 
 ## Table of contents
 * [General Features](#General-Features)
@@ -36,7 +36,7 @@
 * CNC Configurator
 
 ## Usage
-- For detailed information about the use of the addon;
+- For detailed information about the use of the add-on;
   * [Wiki](https://github.com/manahter/nCNC/wiki)
   * [Youtube](https://www.youtube.com/watch?v=mPNej4vpJvc&list=PLEhXwZnmfmZUFy7qmVqo_J2PuXGDBswYh)
 
