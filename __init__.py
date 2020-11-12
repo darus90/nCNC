@@ -6,6 +6,7 @@ import time
 from datetime import timedelta
 from .nVector import nVector
 from mathutils import Vector, Matrix
+from mathutils.geometry import intersect_sphere_sphere_2d
 import math
 
 import blf
@@ -51,20 +52,19 @@ bl_info = {
     "name": "nCNC",
     "description": "CNC Controls, G code operations",
     "author": "Manahter",
-    "version": (0, 6, 2),
+    "version": (0, 6, 3),
     "blender": (2, 90, 0),
     "location": "View3D",
     "category": "Generic",
     "warning": "Under development. Nothing is guaranteed",
     "doc_url": "https://github.com/manahter/nCNC/wiki",
     "tracker_url": "https://github.com/manahter/nCNC/issues"
-    }
+}
 
 # Serial Connecting Machine
 dev = None
 
 tr_translate = str.maketrans("ÇĞİÖŞÜçğıöşü", "CGIOSUcgiosu")
-
 
 """
 Eklenecek Özellikler;
@@ -73,6 +73,9 @@ Eklenecek Özellikler;
     * Kod çizgileri görününce, included objeler görünmesin. (Vision'dan bu özellik aktifleştirilebilir olur)
     * Toolpaths HeaderDraw'a Göster/Gizle Ekle -> Objeler için
     * Sadece belli bir objenin yollarını (kodunu) göster/gizle özelliği ekle
+    
+    * Koddaki hatalı kısımların çizgisi kırmızı olacak şekilde düzenle. Vision'a da eklenebilir
+    
 """
 
 
@@ -82,6 +85,9 @@ class NCNC_Prefs(AddonPreferences):
     bl_idname = __name__
 
     last_preset: StringProperty()
+
+
+text_editor_files = []
 
 
 class NCNC_PR_Texts(PropertyGroup):
@@ -115,7 +121,13 @@ class NCNC_PR_Texts(PropertyGroup):
         return row
 
     def texts_items(self, context):
-        return [(i.name, i.name, "") for i in bpy.data.texts]
+        # The reason we used different variables in between was that we got an error when the unicode character was
+        # in the file name.
+        # Reference:
+        # https://devtalk.blender.org/t/enumproperty-and-string-encoding/7835
+        text_editor_files.clear()
+        text_editor_files.extend([(i.name, i.name, "") for i in bpy.data.texts])
+        return text_editor_files
 
     def update_texts(self, context):
         self.active_text = bpy.data.texts[self.texts]
@@ -176,15 +188,17 @@ class NCNC_OT_TextsOpen(Operator, ImportHelper):
     # https://blender.stackexchange.com/questions/177742/how-do-i-create-a-text-datablock-and-populate-it-with-text-with-python
 
     filter_glob: StringProperty(
-        default='*.text;*.txt;*.cnc;*.nc;*.tap;*.ngc;*.gc;*.gcode;*.ncnc',
+        default='*.text;*.txt;*.cnc;*.nc;*.tap;*.ngc;*.gc;*.gcode;*.ncnc;*.ncc',
         options={'HIDDEN'}
     )
 
     def execute(self, context):
         with open(self.filepath, 'r') as f:
+
             txt = bpy.data.texts.new(os.path.basename(self.filepath))
             txt.write(f.read())
-            context.scene.ncnc_pr_texts.texts = txt.name
+            if context.scene.ncnc_pr_texts.texts_items:
+                context.scene.ncnc_pr_texts.texts = txt.name
 
         return {'FINISHED'}
 
@@ -200,7 +214,7 @@ class NCNC_OT_TextsSave(Operator, ExportHelper):
     # https://blender.stackexchange.com/questions/150932/export-file-dialog-in-blender-2-80
 
     filter_glob: StringProperty(
-        default='*.text;*.txt;*.cnc;*.nc;*.tap;*.ngc;*.gc;*.gcode;*.ncnc',
+        default='*.text;*.txt;*.cnc;*.nc;*.tap;*.ngc;*.gc;*.gcode;*.ncnc;*.ncc',
         options={'HIDDEN'}
     )
     filename_ext = ".cnc"
@@ -258,10 +272,12 @@ class NCNC_PR_TextLine(PropertyGroup):
     xyz: FloatVectorProperty()
     ijk: FloatVectorProperty()
 
+    r: FloatProperty()
     f: FloatProperty()
 
     length: FloatProperty(default=0)
     pause: FloatProperty(default=0)
+    error: BoolProperty(default=False)
 
     def get_estimated_time(self):
         f = 500 if self.mode_move == 0 else self.f
@@ -272,6 +288,7 @@ class NCNC_PR_TextLine(PropertyGroup):
     def load(self, value: str):
         ismove_xyz = False
         ismove_ijk = False
+        ismove_r = False
 
         self.code_full = value
         self.prev_line = self.id_data.ncnc_pr_text.lines[self.index - 1]
@@ -326,25 +343,40 @@ class NCNC_PR_TextLine(PropertyGroup):
         else:
             self.f = self.prev_line.f
 
+        ps = re.findall('R *([+-]?\d*\.?\d*)', value)
+        if len(ps) == 1 and re.sub("[+-.]", "", ps[0]).isdigit():
+            ismove_r = True
+            self.r = float(ps[0]) * (1 if self.mode_units == 21 else 25.4)
+            if ismove_ijk:
+                self.error = True
+
         # ###############################################
         # ######################################## PAUSE
         ps = re.findall('G4 *P([+]?\d*\.?\d*)', value)
         if len(ps) == 1 and re.sub("[+.]", "", ps[0]).isdigit():
             self.pause = float(ps[0])
 
-        if (ismove_xyz and self.mode_move in (0, 1)) or (ismove_xyz and ismove_ijk):
+        if (ismove_xyz and self.mode_move in (0, 1)) or (ismove_xyz and ismove_ijk) or (ismove_xyz and ismove_r):
             self.ismove = True
 
-        if self.ismove:
+        if self.ismove and not self.error:
             for i in self.calc_lines():
                 a = self.lines.add()
                 a.co = i
+
+        if self.error:
+            self.mode_distance = self.prev_line.mode_distance
+            self.mode_plane = self.prev_line.mode_plane
+            self.mode_units = self.prev_line.mode_units
+            self.mode_move = self.prev_line.mode_move
+            self.xyz = self.prev_line.xyz
+            self.ismove = False
+            self.f = self.prev_line.f
         return
 
     def calc_lines(self, step: int = 0):
         """For this item"""
         mv = self.mode_move
-
         prev_xyz = Vector(self.prev_line.xyz)
         xyz = Vector(self.xyz)
 
@@ -352,7 +384,40 @@ class NCNC_PR_TextLine(PropertyGroup):
             self.length = (prev_xyz - xyz).length
             return prev_xyz, xyz
 
-        ijk = Vector(self.ijk)
+        # If the R code is used, we must convert the R code to IJK
+        # +R: Short angle way
+        # -R: Long angle way
+        if self.r:
+            # Reference:
+            # https://docs.blender.org/api/current/mathutils.geometry.html?highlight=intersect_sphere_sphere_2d#mathutils.geometry.intersect_sphere_sphere_2d
+
+            r = abs(self.r)
+            distance = round((xyz - prev_xyz).length / 2, 3)
+
+            # Distance greater than diameter
+            if distance > round(r, 3):
+                self.error = True
+                return []
+
+            # Distance equal to diameter
+            elif distance == round(r, 3):
+                ijk = (xyz + prev_xyz) / 2
+
+            # Distance smaller than diameter
+            else:
+                intersects = intersect_sphere_sphere_2d(prev_xyz[:2], r, xyz[:2], r)
+
+                if mv == 3:
+                    ijk = intersects[self.r > 0]
+                else:
+                    ijk = intersects[self.r < 0]
+
+                ijk = Vector((*ijk[:], 0))
+
+            ijk = ijk - prev_xyz
+        else:
+            ijk = Vector(self.ijk)
+
         center = prev_xyz + ijk
 
         bm = bmesh.new()
@@ -370,12 +435,22 @@ class NCNC_PR_TextLine(PropertyGroup):
         v2 = xyz - center
         v2.z = 0
 
-        # Angle between V1 and V2 (RADIANS)
-        angle = v1.angle(v2)
+        try:
+            if abs(v1.length - v2.length) > 0.01:
+                raise Exception
+
+            # Angle between V1 and V2 (RADIANS)
+            angle = v1.angle(v2)
+        except:
+            self.error = True
+            return []
+
         if v1.cross(v2).z > 0 and mv == 2:
             angle = math.radians(360) - angle
         elif v1.cross(v2).z < 0 and mv == 3:
             angle = math.radians(360) - angle
+        elif v1.cross(v2).z == 0:
+            angle = math.radians(360 if not self.r else 180)
 
         self.length = angle * v1.length
 
@@ -403,8 +478,6 @@ class NCNC_PR_TextLine(PropertyGroup):
                        cent=center
                        )
         # print("\n"*2)
-        # print("CODE :", self.CODE)
-        # print("NO :", self.NO)
         # print("Prev :", prev_xyz)
         # print("XYZ :", xyz)
         # print("IJK :", ijk)
@@ -493,7 +566,7 @@ class NCNC_PR_Text(PropertyGroup):
 
         count = len(self.lines)
 
-        if count > self.last_end_index > self.last_cur_index:
+        if count >= self.last_end_index > self.last_cur_index:
             lines = []
             for i in range(self.last_cur_index, self.last_end_index):
                 line = self.lines[i]
@@ -556,6 +629,20 @@ class NCNC_OT_Text(Operator):
     last_index = 0
     pr_txt = None
     delay = .1
+
+    # Added radius R value reading feature in G code.
+    # Reference
+    # https://www.bilkey.com.tr/online-kurs-kurtkoy/cnc/fanuc-cnc-programlama-kodlari.pdf
+    # https://www.cnccookbook.com/cnc-g-code-arc-circle-g02-g03/
+    # http://www.helmancnc.com/circular-interpolation-concepts-programming-part-2/
+
+
+    # R açıklama
+    # x0'dan x10'a gideceğiz diyelim.
+    # R -5 ile 5 aralığında olamaz. Çünkü X'in başlangıç ve bitiş noktası arası mesafe zaten 10.
+    # 10/2 = 5 yapar. R değeri en küçük 5 olur.
+    # R - değer alırsa, çemberin büyük tarafını takip eder. + değer alırsa küçük tarafını.
+    #
 
     def execute(self, context):
         return self.invoke(context, None)
@@ -989,6 +1076,10 @@ class NCNC_OT_Convert(Operator):
     block = 0
     first_point = None
 
+    ### !!! Hata düzelt.
+    # işlem yapılırken, mesela step_z değerini değiştiriken, bu operatöre çok defa giriyor ve
+    # hata olarak ekranda objenin kopyalarını oluşturuyor.
+
     def execute(self, context):
         return self.invoke(context, None)
 
@@ -1031,6 +1122,9 @@ class NCNC_OT_Convert(Operator):
                 conf = obj.ncnc_pr_toolpathconfigs
 
                 self.dongu = []
+
+                if conf.step > conf.depth:
+                    continue
 
                 # Steps in the Z axis -> 0.5, 1.0, 1.5, 2.0 ...
                 self.dongu.extend([i * conf.step for i in range(1, int(conf.depth / conf.step + 1), )])
@@ -1149,7 +1243,8 @@ class NCNC_OT_Convert(Operator):
                     self.bezier(obj, subcurve, reverse=j % 2 is 1)
 
     def bezier(self, obj, subcurve, reverse=False):
-
+        """Burqada bir güncelleme yap:
+        pref.as_line değerine göre g2 ve g3 kodlarını kullan veya kullanma"""
         pref = obj.ncnc_pr_toolpathconfigs
         rc = pref.round_circ
         r = pref.round_loca
@@ -1161,11 +1256,17 @@ class NCNC_OT_Convert(Operator):
         nokta_list = []
         for j in range(nokta_sayisi):
             cycle_point = j == nokta_sayisi - 1 and subcurve.use_cyclic_u
-            lp = 0 if cycle_point else j + 1  # last point : son nokta
 
+            # last point
+            lp = 0 if cycle_point else j + 1
+
+            # Point Head
             m1 = subcurve.bezier_points[j].co - self.z_adim
+
             hr = subcurve.bezier_points[j].handle_right - self.z_adim
             hl = subcurve.bezier_points[lp].handle_left - self.z_adim
+
+            # Point End
             m2 = subcurve.bezier_points[lp].co - self.z_adim
 
             # Aşağıda yapılan iş şöyle özetlenebilir;
@@ -1190,15 +1291,29 @@ class NCNC_OT_Convert(Operator):
                     nokta_list.append(m1)
                 nokta_list.append(nVector.bul_dogrunun_ortasi_2p(m1, m2))
                 nokta_list.append(m2)
-            elif bak_merkez[0] == bak_merkez[1] and bak_merkez[1] == bak_merkez[2]:
+            elif not pref.as_line and bak_merkez[0] == bak_merkez[1] and bak_merkez[1] == bak_merkez[2]:
                 if j == 0:
                     nokta_list.append(m1)
                 nokta_list.append(nVector.bul_bezier_nokta_4p1t(0.5, m1, hr, hl, m2))
                 nokta_list.append(m2)
+
+            # If you want a Line rather than a Curve
+            elif pref.as_line:
+                resolution = subcurve.resolution_u
+                step = 1 / resolution / 2
+                for i in range(resolution*2 + 1):
+                    o = nVector.bul_bezier_nokta_4p1t(step * i, m1, hr, hl, m2)
+                    if i != 0 or j == 0:
+                        nokta_list.append(o)
+
+            # For Curve
             else:
                 resolution = subcurve.resolution_u
-                if resolution % 2 == 1:  # Çözünürlük çift katsayılı yapıldı
+
+                # Çözünürlük çift katsayılı yapıldı.
+                if resolution % 2 == 1:
                     resolution += 1
+
                 step = 1 / resolution
                 for i in range(resolution + 1):
                     o = nVector.bul_bezier_nokta_4p1t(step * i, m1, hr, hl, m2)
@@ -1206,6 +1321,7 @@ class NCNC_OT_Convert(Operator):
                         pass
                     else:
                         nokta_list.append(o)
+
 
         if reverse:
             nokta_list.reverse()
@@ -1248,7 +1364,7 @@ class NCNC_OT_Convert(Operator):
                 # First Plunge in Z
                 self.kodlar.append(f"G1 Z{round(p1.z, r)} F{pref.plunge}")
 
-            if abs(I) > limit or abs(J) > limit or abs(K) > limit:
+            if pref.as_line or abs(I) > limit or abs(J) > limit or abs(K) > limit:
                 # q = "G1 X{1:.{0}f} Y{2:.{0}f} Z{3:.{0}f}".format(r, p2.x, p2.y, p2.z)
                 q = "G1 X{1:.{0}f} Y{2:.{0}f} Z{3:.{0}f}".format(r, p3.x, p3.y, p3.z)
             else:
@@ -1332,7 +1448,6 @@ class NCNC_PR_Connection(PropertyGroup):
             bpy.ops.ncnc.communication(start=True)
         else:
             bpy.ops.ncnc.communication(start=False)
-
 
     def get_ports(self, context):
         return [(i.device, str(i), i.name) for i in comports()]
@@ -1690,7 +1805,7 @@ def register_modal(self):
 def unregister_modal(self):
     # Get previous running modal
     self_prev = running_modals.get(self.bl_idname)
-    
+
     try:
         # if exists previous modal (self), stop it
         if self_prev:
@@ -1700,6 +1815,7 @@ def unregister_modal(self):
             # self.report({'INFO'}, "NCNC Communication: Stopped (Previous Modal)")
     except:
         running_modals.pop(self.bl_idname)
+
 
 # ##########################################################
 # ##########################################################
@@ -4814,12 +4930,12 @@ class NCNC_PR_ToolpathConfigs(PropertyGroup):
     # #############################################################################
     round_loca: IntProperty(
         name="Round (Location)",
-         default=3,
-         min=0,
-         max=6,
-         update=reload_gcode,
-         description="Floating point resolution of location analysis? (default=3)\n"
-                     "[0-6] = Rough analysis - Detailed analysis"
+        default=3,
+        min=0,
+        max=6,
+        update=reload_gcode,
+        description="Floating point resolution of location analysis? (default=3)\n"
+                    "[0-6] = Rough analysis - Detailed analysis"
     )
     round_circ: IntProperty(
         name="Round (Circle)",
@@ -4830,6 +4946,14 @@ class NCNC_PR_ToolpathConfigs(PropertyGroup):
         description="Floating point resolution of circular analysis? (default=1)\n"
                     "[0-6] = Rough analysis - Detailed analysis"
     )
+
+    as_line: BoolProperty(
+        name="As a Line or Curve",
+        update=reload_gcode,
+        description="as Line: Let it consist of lines only. Don't use G2-G3 code.\n"
+                    "as Curve: Use curves and lines. Use all, including G2-G3."
+    )
+
     yvrla_g23d: IntProperty(
         name="Yuvarla (G2-G3 Koordinat)",
         default=0,
@@ -4941,6 +5065,9 @@ class NCNC_PT_ToolpathConfigs(Panel):
         row.prop(props, "included", text="", icon="CHECKBOX_HLT" if props.included else "CHECKBOX_DEHLT")
         row.enabled = props.check_curve(obj)
         row.prop(obj, "name", text="")
+        row.prop(props, "as_line",
+                 icon="IPO_CONSTANT" if props.as_line else "IPO_EASE_IN_OUT",
+                 icon_only=True)
 
         # if not props.check_curve(obj):
         #    row.operator("ncnc.toolpathconfigs", text="", icon="CURVE_DATA")
