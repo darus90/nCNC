@@ -43,6 +43,17 @@
 [![Jog](https://user-images.githubusercontent.com/73780835/98465377-bef0bd00-21d9-11eb-8c31-b40152f22837.gif)](https://youtu.be/6yTcJT8kL2c?t=286 "go Youtube Video")
 
 ## Feature Done 
+### v0.6.3
+* The feature of creating a circle in a single line has been improved.
+* G2-G3 code cancellation feature has been added in toolpath configs. (Curve/Line, reverse button)
+as Line: Let it consist of lines only. Don't use G2-G3 code.
+as Curve: Use curves and lines. Use all, including G2-G3.
+* Added radius R value reading feature in G code.
+* [Click for details](https://github.com/manahter/nCNC/releases/tag/v0.6.3)
+
+### v0.6.2
+* Fixed Modal bug
+* Fixed the bug that occurred while deactivating and activating the add-on while the connection was open.
 
 ### v0.6.1
 * Add Scene nCNC Settings Panel
