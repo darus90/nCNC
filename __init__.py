@@ -52,7 +52,7 @@ bl_info = {
     "name": "nCNC",
     "description": "CNC Controls, G code operations",
     "author": "Manahter",
-    "version": (0, 6, 3),
+    "version": (0, 6, 5),
     "blender": (2, 90, 0),
     "location": "View3D",
     "category": "Generic",
@@ -107,16 +107,17 @@ class NCNC_PR_Texts(PropertyGroup):
             context.scene.ncnc_pr_vision.prop_bool(row, "gcode")
 
         row.prop(self, "texts", text="", icon="TEXT", icon_only=True)
-        if self.active_text:
-            row.prop(self.active_text, "name", text="")
-        row.operator("ncnc.textsopen", icon="FILEBROWSER", text=("" if self.active_text else "Open"))
-        if self.active_text:
-            row.operator("ncnc.textsremove", icon="X", text="")
-            # row.operator("ncnc.textssave", icon="EXPORT", text="")
 
         if self.loading > 0:
-            row = layout.row(align=True)
+            # row = layout.row(align=True)
             row.prop(self, "loading", slider=True)
+        else:
+            if self.active_text:
+                row.prop(self.active_text, "name", text="")
+            row.operator("ncnc.textsopen", icon="FILEBROWSER", text=("" if self.active_text else "Open"))
+            if self.active_text:
+                row.operator("ncnc.textsremove", icon="X", text="")
+                # row.operator("ncnc.textssave", icon="EXPORT", text="")
 
         return row
 
@@ -194,7 +195,6 @@ class NCNC_OT_TextsOpen(Operator, ImportHelper):
 
     def execute(self, context):
         with open(self.filepath, 'r') as f:
-
             txt = bpy.data.texts.new(os.path.basename(self.filepath))
             txt.write(f.read())
             if context.scene.ncnc_pr_texts.texts_items:
@@ -466,7 +466,7 @@ class NCNC_PR_TextLine(PropertyGroup):
         else:
             step = math.ceil(angle_degrees / 2)
 
-        # ####### !!!!!!!!!!!!
+        # ####### !!!
         # Bu kısımda axis'i güncelle ileride
         # Çünkü, G17, G18 vs düzlemine göre axis değişir
         bmesh.ops.spin(bm,
@@ -636,7 +636,6 @@ class NCNC_OT_Text(Operator):
     # https://www.cnccookbook.com/cnc-g-code-arc-circle-g02-g03/
     # http://www.helmancnc.com/circular-interpolation-concepts-programming-part-2/
 
-
     # R açıklama
     # x0'dan x10'a gideceğiz diyelim.
     # R -5 ile 5 aralığında olamaz. Çünkü X'in başlangıç ve bitiş noktası arası mesafe zaten 10.
@@ -712,7 +711,7 @@ class NCNC_OT_Text(Operator):
         if context.area:
             context.area.tag_redraw()
 
-        self.report({'INFO'}, "Loaded")
+        self.report({'INFO'}, "G-Code Loaded")
         self.pr_txt.isrun[self.run_index] = False
         context.scene.ncnc_pr_texts.loading = 0
         return self.timer_remove(context)
@@ -1065,28 +1064,137 @@ class nCompute:
         return A + cls.circle_center_(B_, C_, N)
 
 
+# my_icons_dir = os.path.join(os.path.dirname(__file__), "icons")
+# icons = bpy.utils.previews.new()
+# icons.load("my_icon", os.path.join(my_icons_dir, "auto.png"), 'IMAGE')
+# row.prop( ... icon_value=icons["my_icon"].icon_id ...)
+
+# Sahne güncellendiğinde bir iş yaptır.
+# Bu metod, * aktif obje değiştiğinde, * veya ekranda birşey değiştiğinde çağrılıyor.
+def convert_updated_objects(scene):
+    updated_objects = []
+    for o in scene.objects:
+        if o.update_from_editmode() or o.update_tag():
+            updated_objects.append(o)
+    if(len(updated_objects) > 0):
+        print("updated objects: %s"%updated_objects[0])
+
+    # bu fonksiyonun içinde operatör çalışmıyor. Program akapnıyor.
+    # bpy.ops.ncnc.convert(auto_call=True)
+
+# Bu fonksiyonu, bir operatörün içine ekle. Yani program yüklendikten daha sonra bu fonksiyon yüklensin.
+bpy.app.handlers.depsgraph_update_post.append(convert_updated_objects)
+
+
+# #################################
+# #################################
+# #################################
+class NCNC_PR_Convert(PropertyGroup):
+    isrun = []
+
+    loading: IntProperty(
+        name="Loading...",
+        subtype="PERCENTAGE",
+        default=0,
+        min=0,
+        max=100
+    )
+
+    def update_overwrite(self, context):
+        if not self.overwrite:
+            self.auto_convert = False
+
+    overwrite: BoolProperty(
+        name="Overwrite",
+        default=True,
+        description="Overwrite the last text",
+        update=update_overwrite
+    )
+    auto_convert: BoolProperty(
+        name="Auto Convert",
+        default=False,
+        description="On / Off"
+    )
+
+    def template_convert(self, layout, context=None):
+
+        row = layout.row(align=True)
+        row.prop(self, "overwrite",
+                 icon_only=True,
+                 icon=("RADIOBUT_ON" if self.overwrite else "RADIOBUT_OFF"),
+                 invert_checkbox=self.overwrite)
+        row.separator()
+        row.operator("ncnc.convert",
+                     text="Convert to G-Code" if not self.loading else "",
+                     icon="COLOR_GREEN",
+                     )
+        if self.loading:
+            row.prop(self, "loading", slider=True)
+        if self.overwrite:
+            row.prop(self, "auto_convert",
+                     icon_only=True,
+                     icon=("ONIONSKIN_ON" if self.auto_convert else "ONIONSKIN_OFF"),
+                     # invert_checkbox=self.auto_convert
+                     )
+        return row
+
+    @classmethod
+    def register(cls):
+        Scene.ncnc_pr_convert = PointerProperty(
+            name="NCNC_PR_Convert Name",
+            description="NCNC_PR_Convert Description",
+            type=cls
+        )
+
+    @classmethod
+    def unregister(cls):
+        del Scene.ncnc_pr_convert
+
+
 class NCNC_OT_Convert(Operator):
     bl_idname = "ncnc.convert"
     bl_label = "Convert"
     bl_description = "Convert included objects to Gcode"
     bl_options = {'REGISTER'}
 
+    # if auto converting, auto_call must True
+    auto_call: BoolProperty(default=False)
+
     kodlar = []
     shape = 0
     block = 0
-    first_point = None
 
-    ### !!! Hata düzelt.
-    # işlem yapılırken, mesela step_z değerini değiştiriken, bu operatöre çok defa giriyor ve
-    # hata olarak ekranda objenin kopyalarını oluşturuyor.
+    delay = .1
+    _last_time = 0
+    run_index = 0
+    last_index = 0
+
+    pr_txs = None
+    first_point = None
+    last_selected_object = None
+
+    # ## !!! Döngüdeki Z step için de modalı kullanılabilir yap ki, convert edilirken donma olmasın
 
     def execute(self, context):
         return self.invoke(context, None)
 
-    def invoke(self, context, event=None):
+    def invoke(self, context, event):
+        pr_cvr = context.scene.ncnc_pr_convert
+
+        if self.auto_call and not pr_cvr.auto_convert:
+            return {'CANCELLED'}
+
+        len_isrun = len(pr_cvr.isrun)
+        if len_isrun:
+            pr_cvr.isrun[-1] = False
+
+        self.run_index = len_isrun
+        pr_cvr.isrun.append(True)
+
         self.first_point = Vector((0, 0, 0))
-        pr_obj = bpy.context.scene.ncnc_pr_objects
-        pr_txs = bpy.context.scene.ncnc_pr_texts
+        self.pr_obj = bpy.context.scene.ncnc_pr_objects
+        self.pr_txs = bpy.context.scene.ncnc_pr_texts
+        self.last_selected_object = context.active_object
 
         ##################
         # Convert to GCodes
@@ -1094,91 +1202,147 @@ class NCNC_OT_Convert(Operator):
         self.add_header(context)
         self.shape = 0
 
-        last_selected_object = context.active_object
+        context.window_manager.modal_handler_add(self)
 
-        for obj_orj in pr_obj.items:
-            # Copy and select to object
-            obj = obj_orj.obj.copy()
-            obj.data = obj_orj.obj.data.copy()
-            bpy.data.collections[0].objects.link(obj)
+        return self.timer_add(context)
 
-            # Do active to object
+    def timer_add(self, context):
+        wm = context.window_manager
+        self._timer = wm.event_timer_add(self.delay, window=context.window)
+        return {"RUNNING_MODAL"}
+
+    def timer_remove(self, context):
+        wm = context.window_manager
+        wm.event_timer_remove(self._timer)
+        return {'CANCELLED'}
+
+    def modal(self, context, event):
+        if time.time() - self._last_time < self.delay:
+            return {'PASS_THROUGH'}
+
+        self._last_time = time.time()
+
+        pr_cvr = context.scene.ncnc_pr_convert
+        pr_cvr.loading = (self.last_index / len(self.pr_obj.items)) * 100
+
+        if not pr_cvr.isrun[self.run_index] or (len(self.pr_obj.items) <= self.last_index):
+            return self.finished(context)
+
+        #############################################
+        #############################################
+        obj_orj = self.pr_obj.items[self.last_index]
+
+        # Copy and select to object
+        obj = obj_orj.obj.copy()
+        obj.data = obj_orj.obj.data.copy()
+
+        # !!!
+        # Default var olan koleksiyon'u sildiğimizde, şu hatayı veriyor;
+        #       bpy.data.collections[0].objects.link(obj)
+        #       ndexError: bpy_prop_collection[index]: index 0 out of range, size 0
+
+        if not len(bpy.data.collections):
+            collection = bpy.data.collections.new("nCNC")
+            bpy.context.scene.collection.children.link(collection)
+
+        bpy.data.collections[0].objects.link(obj)
+
+        self.last_index += 1
+
+        # Do active to object
+        bpy.ops.object.select_all(action='DESELECT')
+        context.view_layer.objects.active = obj
+        obj.select_set(True)
+
+        # To avoid the error in 2D
+        obj.data.dimensions = "3D"
+
+        # Reference:
+        # https://blender.stackexchange.com/questions/75380/apply-transforms-on-object-copies-not-working
+        bpy.ops.object.transform_apply(location=True, scale=True, rotation=True)
+
+        if self.last_selected_object:
+            # Select previous object
             bpy.ops.object.select_all(action='DESELECT')
-            context.view_layer.objects.active = obj
-            obj.select_set(True)
+            context.view_layer.objects.active = self.last_selected_object
+            self.last_selected_object.select_set(True)
 
-            # To avoid the error in 2D
-            obj.data.dimensions = "3D"
-
-            # Reference:
-            # https://blender.stackexchange.com/questions/75380/apply-transforms-on-object-copies-not-working
-            bpy.ops.object.transform_apply(location=True, scale=True, rotation=True)
-
-            if not obj or not obj.ncnc_pr_toolpathconfigs.included:
-                continue
-
-            elif obj.type == 'CURVE':
-                # The configurations of the object
-                conf = obj.ncnc_pr_toolpathconfigs
-
-                self.dongu = []
-
-                if conf.step > conf.depth:
-                    continue
-
-                # Steps in the Z axis -> 0.5, 1.0, 1.5, 2.0 ...
-                self.dongu.extend([i * conf.step for i in range(1, int(conf.depth / conf.step + 1), )])
-
-                # Calculate last Z step
-                if conf.depth % conf.step > 0.01:
-                    if len(self.dongu):
-                        self.dongu.append(round(self.dongu[-1] + conf.depth % conf.step, conf.round_loca))
-                    else:
-                        self.dongu.append(round(self.dongu[-1], conf.round_loca))
-
-                self.block = 0
-                self.shape += 1
-
-                # Create initial configs of the shape -> Block x.0
-                self.add_block(expand="1", enable="1")
-                self.kodlar.append(f"{conf.plane} ( Plane Axis )")
-                self.kodlar.append(f"S{conf.spindle} ( Spindle )")
-                self.kodlar.append(f"( Safe Z : {conf.safe_z} )")
-                self.kodlar.append(f"( Step Z : {conf.step} )")
-                self.kodlar.append(f"( Total depth : {round(conf.depth, 3)} )")
-                self.kodlar.append(f"( Feed Rate -mm/min- : {conf.feed} )")
-                self.kodlar.append(f"( Plunge Rate -mm/min- : {conf.plunge} )")
-
-                # Necessary calculations have been made
-                # Gcode can now be creating for object
-                self.convert_gcode(obj)
-
+        ##################################################
+        ##################################################
+        if not obj or not obj.ncnc_pr_toolpathconfigs.included:
             # Remove to volatile object
             bpy.data.collections[0].objects.unlink(obj)
             bpy.data.objects.remove(obj)
+            return {'PASS_THROUGH'}
+
+        elif obj.type == 'CURVE':
+            # The configurations of the object
+            conf = obj.ncnc_pr_toolpathconfigs
+
+            self.dongu = []
+
+            if conf.step > conf.depth:
+                # Remove to volatile object
+                bpy.data.collections[0].objects.unlink(obj)
+                bpy.data.objects.remove(obj)
+                return {'PASS_THROUGH'}
+
+            # Steps in the Z axis -> 0.5, 1.0, 1.5, 2.0 ...
+            self.dongu.extend([i * conf.step for i in range(1, int(conf.depth / conf.step + 1), )])
+
+            # Calculate last Z step
+            if conf.depth % conf.step > 0.01:
+                if len(self.dongu):
+                    self.dongu.append(round(self.dongu[-1] + conf.depth % conf.step, conf.round_loca))
+                else:
+                    self.dongu.append(round(self.dongu[-1], conf.round_loca))
+
+            self.block = 0
+            self.shape += 1
+
+            # Create initial configs of the shape -> Block x.0
+            self.add_block(expand="1", enable="1")
+            self.kodlar.append(f"{conf.plane} ( Plane Axis )")
+            self.kodlar.append(f"S{conf.spindle} ( Spindle )")
+            self.kodlar.append(f"( Safe Z : {conf.safe_z} )")
+            self.kodlar.append(f"( Step Z : {conf.step} )")
+            self.kodlar.append(f"( Total depth : {round(conf.depth, 3)} )")
+            self.kodlar.append(f"( Feed Rate -mm/min- : {conf.feed} )")
+            self.kodlar.append(f"( Plunge Rate -mm/min- : {conf.plunge} )")
+
+            # Necessary calculations have been made
+            # Gcode can now be creating for object
+            self.convert_gcode(obj)
+
+        # Remove to volatile object
+        bpy.data.collections[0].objects.unlink(obj)
+        bpy.data.objects.remove(obj)
+        #############################################
+        #############################################
+
+        return {'PASS_THROUGH'}
+
+    def finished(self, context):
+        pr_cvr = context.scene.ncnc_pr_convert
+        pr_cvr.isrun[self.run_index] = False
+        pr_cvr.loading = 0
         self.add_footer()
 
         ###########################
         # Create Internal Text File
         file_name = "nCNC"
 
-        if pr_obj.overwrite and file_name in bpy.data.texts.keys():
+        if pr_cvr.overwrite and file_name in bpy.data.texts.keys():
             bpy.data.texts.remove(bpy.data.texts[file_name])
 
         str_codes = "\n".join(self.kodlar)
         mytext = bpy.data.texts.new(file_name)
         mytext.write(str_codes)
 
-        pr_txs.texts = mytext.name
+        self.pr_txs.texts = mytext.name
         self.report({"INFO"}, "Converted")
 
-        if last_selected_object:
-            # Select before object
-            bpy.ops.object.select_all(action='DESELECT')
-            context.view_layer.objects.active = last_selected_object
-            last_selected_object.select_set(True)
-
-        return {"FINISHED"}
+        return self.timer_remove(context)
 
     def add_header(self, context):
         self.add_block(name="Header", expand="1", enable="1")
@@ -1301,7 +1465,7 @@ class NCNC_OT_Convert(Operator):
             elif pref.as_line:
                 resolution = subcurve.resolution_u
                 step = 1 / resolution / 2
-                for i in range(resolution*2 + 1):
+                for i in range(resolution * 2 + 1):
                     o = nVector.bul_bezier_nokta_4p1t(step * i, m1, hr, hl, m2)
                     if i != 0 or j == 0:
                         nokta_list.append(o)
@@ -1321,7 +1485,6 @@ class NCNC_OT_Convert(Operator):
                         pass
                     else:
                         nokta_list.append(o)
-
 
         if reverse:
             nokta_list.reverse()
@@ -2196,11 +2359,15 @@ class NCNC_OT_Decoder(Operator):
         # ####################################
         # ####################################
 
-        # !!! 3D ViewPort kısmını, sol üstten, TextEditor vs 'ye çevirince, bu kısımda hata çıkıyor.
-        # Bu hatayı onar !!!
-        # if not context.area:
-        #     print(context.area)
-        #     return {"CANCELLED"}
+        # !!! Bug: 3D ViewPort kısmını, sol üstten, TextEditor vs 'ye çevirince, bu kısımda hata çıkıyor.
+        # Bug fixed in v0.6.4
+        if not context.area:
+            self.report({'WARNING'}, "Main Area Closed")
+            self.report({'Info'}, "You need to re-establish the connection.")
+            unregister_modal(self)
+            context.scene.ncnc_pr_connection.isconnected = False
+            return self.timer_remove(context)
+
         self.ct_reg = context.area.regions
         self.pr_dev = context.scene.ncnc_pr_machine
         self.pr_con = context.scene.ncnc_pr_connection
@@ -4841,7 +5008,7 @@ class NCNC_PR_ToolpathConfigs(PropertyGroup):
     obj: PointerProperty(type=Object, name="Object")
 
     def reload_gcode(self, context):
-        bpy.ops.ncnc.convert()
+        bpy.ops.ncnc.convert(auto_call=True)
 
     def update_included(self, context):
         if self.included:
@@ -4881,6 +5048,7 @@ class NCNC_PR_ToolpathConfigs(PropertyGroup):
     )
     step: FloatProperty(
         name="Step Z",
+        min=.01,
         default=0.5,
         # unit="LENGTH",
         description="Z Machining depth in one step",
@@ -4889,6 +5057,7 @@ class NCNC_PR_ToolpathConfigs(PropertyGroup):
     depth: FloatProperty(
         name="Total Depth",
         default=1,
+        min=0,
         # unit="LENGTH",
         description="Son işleme derinliği",
         update=reload_gcode
@@ -5193,11 +5362,6 @@ class NCNC_PR_Objects(PropertyGroup):
         description="Selected object index in Collection",
         update=update_active_item_index,
     )
-    overwrite: BoolProperty(
-        name="Overwrite",
-        default=True,
-        description="Overwrite the last text"
-    )
 
     @classmethod
     def register(cls):
@@ -5355,15 +5519,8 @@ class NCNC_PT_Objects(Panel):
             rows=5,
             type='DEFAULT'
         )
-        row = layout.row(align=False)
-        row.prop(props, "overwrite",
-                 icon_only=True,
-                 icon=("RADIOBUT_ON" if props.overwrite else "RADIOBUT_OFF"),
-                 invert_checkbox=props.overwrite)
 
-        row.operator("ncnc.convert",
-                     text="Convert to GCode",
-                     icon="COLOR_GREEN")
+        context.scene.ncnc_pr_convert.template_convert(layout, context=context)
 
 
 ##################################
@@ -5412,6 +5569,7 @@ classes = [
     NCNC_OT_Scene,
     NCNC_PT_Scene,
 
+    NCNC_PR_Convert,
     NCNC_OT_Convert,
 
     NCNC_PR_Connection,
