@@ -48,6 +48,7 @@ This add-on; Allows you to control the CNC machine and generate G-code to millin
 * Bug fixed object duplication when modifying Toolpath Configs.
 * Added, G-Code conversion progress bar
 * Changed, G-Code reader progress bar position
+* Added 'auto convert' button. Not fully stable. Continuing to improve.
 
 ### v0.6.3
 * The feature of creating a circle in a single line has been improved.
