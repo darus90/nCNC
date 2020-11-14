@@ -7,7 +7,7 @@
 [![Blender Addon](https://img.shields.io/github/license/manahter/nCNC)](https://github.com/manahter/nCNC/blob/main/LICENSE)
 ![GitHub last commit](https://img.shields.io/github/last-commit/manahter/nCNC)
 
-
+This add-on; Allows you to control the CNC machine and generate G-code to milling.
 
 * _Currently only curves can be converted (will be developed for 3D objects as well)_
 * _This add-on has been tested with GRBL v1.1 - CNC 3018._
@@ -43,6 +43,12 @@
 [![Jog](https://user-images.githubusercontent.com/73780835/98465377-bef0bd00-21d9-11eb-8c31-b40152f22837.gif)](https://youtu.be/6yTcJT8kL2c?t=286 "go Youtube Video")
 
 ## Feature Done 
+### v0.6.4
+* Bug fixed when closing the main 3D viewport
+* Bug fixed object duplication when modifying Toolpath Configs.
+* Added, G-Code conversion progress bar
+* Changed, G-Code reader progress bar position
+
 ### v0.6.3
 * The feature of creating a circle in a single line has been improved.
 * G2-G3 code cancellation feature has been added in toolpath configs. (Curve/Line, reverse button)
